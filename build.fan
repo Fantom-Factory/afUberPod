@@ -1,4 +1,4 @@
-using build
+using build::BuildPod
 
 class Build : BuildPod {
 
@@ -15,11 +15,11 @@ class Build : BuildPod {
 
 		depends = [
 			"sys   1.0.70 - 1.0",
-			"build 1.0.70 - 1.0"
+			"build 1.0.70 - 1.0",
 		]
 
 		srcDirs = [`fan/`, `test/`]
-//		resDirs = [`res/test/`]
+		resDirs = [`doc/`]
 
 		docApi = true
 		docSrc = true
