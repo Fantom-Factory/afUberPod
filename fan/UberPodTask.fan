@@ -45,6 +45,13 @@ class UberPodTask : Task {
 				usings1.any { fanLine == it } ||
 				usings2.any { fanLine.startsWith(it) }
 			}
+
+			// TODO make classes, enums, & mixins internal
+//			newSrc.each |fanLine| {
+//				if (fanLine.contains("class "))
+//					echo(fanLine)
+//			}
+			
 			if (fanSrc.size != newSrc.size)
 				fanFile.out.writeChars(newSrc.join("\n")).flush.close
 		}
