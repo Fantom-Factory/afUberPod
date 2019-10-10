@@ -28,7 +28,14 @@ class UberPodTask : Task {
 		allPodNames.each { filterPodCode(it) }
 		
 		build.srcDirs = uberSrcDirs.unique
-		build.resDirs = uberResDirs.unique
+//		build.resDirs = uberResDirs.unique
+		build.depends = build.depends.exclude |dep| {
+			uberPodNames.any { dep.startsWith(it) }
+		}
+		
+		build.depends.each { echo(it) }
+		echo(build.srcDirs)
+		echo(build.resDirs)
 	}
 
 	private Void filterPodCode(Str podName) {
@@ -52,14 +59,14 @@ class UberPodTask : Task {
 		build.srcDirs?.each |srcDirUrl| {
 			uberSrcDir := uberDir + build.podName.toUri.plusSlash
 			srcDirUrl.toFile.listFiles.each { it.copyTo(uberSrcDir + it.name.toUri) }
-			uberSrcDirs.add(uberSrcDir.uri.relTo(uberDir.uri))
+			uberSrcDirs.add(uberSrcDir.uri.relTo(build.scriptDir.uri))
 		}
 
-		build.resDirs?.each |resDirUrl| {
-			uberResDir := uberDir + resDirUrl
-			resDirUrl.toFile.listFiles.each { it.copyTo(uberResDir + it.name.toUri) }
-			uberResDirs.add(uberResDir.uri.relTo(uberDir.uri))
-		}
+//		build.resDirs?.each |resDirUrl| {
+//			uberResDir := uberDir + resDirUrl
+//			resDirUrl.toFile.listFiles.each { it.copyTo(uberResDir + it.name.toUri) }
+//			uberResDirs.add(uberResDir.uri.relTo(build.scriptDir.uri))
+//		}
 
 		uberPodNames.each |podName| {
 			uberPodDir	:= uberDir + podName.toUri.plusSlash
@@ -69,18 +76,20 @@ class UberPodTask : Task {
 			try {
 				podZip.contents.each |file, uri| {
 					if (uri.path.first != "src")				return
+					if (uri.basename.endsWith("Test"))			return
+					if (uri.basename.startsWith("Test"))		return
 					uberDstDir := uberPodDir + uri.relTo(`/src/`)
 					file.copyTo(uberDstDir)
-					uberResDirs.add(uberDstDir.uri.relTo(uberDir.uri))
+					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
 				}
 	
-				podZip.contents.each |file, uri| {
-					if (uri.path.size == 1)						return
-					if (dirsToIgnore.contains(uri.path.first))	return
-					uberDstDir := uberDir + uri.relTo(`/`)
-					file.copyTo(uberDstDir)
-					uberResDirs.add(uberDstDir.uri.relTo(uberDir.uri))
-				}
+//				podZip.contents.each |file, uri| {
+//					if (uri.path.size == 1)						return
+//					if (dirsToIgnore.contains(uri.path.first))	return
+//					uberDstDir := uberDir + uri.relTo(`/`)
+//					file.copyTo(uberDstDir)
+//					uberResDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
+//				}
 			} finally
 				podZip.close
 		}
