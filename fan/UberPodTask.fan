@@ -28,14 +28,9 @@ class UberPodTask : Task {
 		allPodNames.each { filterPodCode(it) }
 		
 		build.srcDirs = uberSrcDirs.unique
-//		build.resDirs = uberResDirs.unique
 		build.depends = build.depends.exclude |dep| {
 			uberPodNames.any { dep.startsWith(it) }
 		}
-		
-		build.depends.each { echo(it) }
-		echo(build.srcDirs)
-		echo(build.resDirs)
 	}
 
 	private Void filterPodCode(Str podName) {
@@ -62,12 +57,6 @@ class UberPodTask : Task {
 			uberSrcDirs.add(uberSrcDir.uri.relTo(build.scriptDir.uri))
 		}
 
-//		build.resDirs?.each |resDirUrl| {
-//			uberResDir := uberDir + resDirUrl
-//			resDirUrl.toFile.listFiles.each { it.copyTo(uberResDir + it.name.toUri) }
-//			uberResDirs.add(uberResDir.uri.relTo(build.scriptDir.uri))
-//		}
-
 		uberPodNames.each |podName| {
 			uberPodDir	:= uberDir + podName.toUri.plusSlash
 			podFile 	:= Env.cur.findPodFile(podName)
@@ -82,14 +71,6 @@ class UberPodTask : Task {
 					file.copyTo(uberDstDir)
 					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
 				}
-	
-//				podZip.contents.each |file, uri| {
-//					if (uri.path.size == 1)						return
-//					if (dirsToIgnore.contains(uri.path.first))	return
-//					uberDstDir := uberDir + uri.relTo(`/`)
-//					file.copyTo(uberDstDir)
-//					uberResDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
-//				}
 			} finally
 				podZip.close
 		}
