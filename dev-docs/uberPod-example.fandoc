@@ -1,0 +1,74 @@
+
+Anyway, an example:
+
+If 'afConcurrent' and 'afReflux' (as defined in 'meta["afUberPods.pods"]') are being uberPod'ed into 'afExplorer' then you'd have a dir structure like this:
+
+pre>
+afExplorer/
+ - build/
+   - afUberPod/
+     - afConcurrent/
+       - ConcurrentModule.fan
+       - OtherSrc.fan
+       - ...
+     - afExplorer/
+       - ExplorerModule.fan
+       - OtherSrc.fan
+       - ...
+     - afRefulx/
+       - RefluxModule.fan
+       - OtherSrc.fan
+       - ...
+ - fan/
+ - test/
+ - ...
+<pre
+
+And as will become apparent, it is a good thing that you're copying the 'afExplorer' src into the UberPod build dir. As above, it'd be best if the 'afExplorer' src went into it's own 'afExplorer/' directory instead of individual 'fan/' and 'test/' dirs. All the afExplorer source files can be flattened into the one 'afExplorer/' directory. (A valid Fantom project *must* have unique source file names to avoid just such conflicts.)
+
+'afConcurrent' and 'afRefulx' will need to removed from the 'BuildPod.depends' list as (hopefully) they will no longer be dependencies in the new uber pod.
+
+ALL source files in ALL the UberPod build dirs will have to be inspected and any offending 'using' statement will need to be removed from the src files. Lines like:
+
+  using afConcurrent
+  using afConcurrent::AtomicMap
+  ...
+  using afReflux
+  using afReflux::Wotever
+
+Those 'using' statements are no longer needed because those Classes are now part of our UberPod. (But there is potential for duplicate / clashing Class names - but that's another problem!)
+
+As we are modifying the source code to 'afExplorer' it is a good thing that we are copying it first, so we don't alter the original source (that we may still be developing!).
+
+The issue you're seeing...
+
+  Using 'afReflux' which is not a declared dependency for 'afUberPod'
+
+...is probably because you're trying to compile the UberPod'ed 'afExplorer' from within the UberPod task / project. (I'm guessing here as I'm not too sure what you're invoking / running.)
+
+That's fine because UberPod won't be doing the final compiling. Instead, the following would be cut'n'pasted into the 'build.fan' of 'afExplorer':
+
+  using build::BuildPod
+
+  class Build : BuildPod {
+
+    new make() {
+      podName = "afExplorer"
+      ...
+    }
+
+    ** Compile Fan code into pod file
+    override Void compileFan() {
+
+      // copy and modify src code into build dir
+      // do the same for all pods that are to be uber'ed
+      // then modify the data on this build script instance
+      UberPodTask(this).run
+
+      // do compilation as normal
+      super.compileFan
+    }
+  }
+
+When you compile 'afExplorer' from the cmd line (not from F4) then *our* 'compileFan()' method (above) will get invoked which will perform the Uber modifications just before the usual compilation tasks.
+

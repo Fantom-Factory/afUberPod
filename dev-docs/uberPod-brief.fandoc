@@ -1,0 +1,74 @@
+
+Uber Pod Brief
+##############
+
+What is an UberPod? See [What is an Uber Jar]`https://stackoverflow.com/questions/11947037/what-is-an-uber-jar`. A UberPod will be a pod that contains (some) of its dependencies.
+
+The uber pod should not blindly contain all dependant pods, but rather just those mentioned in the pod meta (in the 'BuildPod') - which can be taken as CSV: (maybe there's a better name for "afUberPod.pods"?)
+
+pre>
+meta = [
+    ...
+    "afUberPod.pods" : "afFom, afBeanUtils, afConcurrent",
+    ...
+]
+<pre
+
+The finished product will be an 'afUberPod' library (.pod file) whose only exposed API will be a Task class subclassed from 'build::Task':
+
+pre>
+using build::Task
+
+class UberPodTask : Task {
+
+    new make(BuildPod script) : super(script) {
+        ...
+    }
+
+    override Void run() {
+        build := script as BuildPod
+
+        ...
+        // builds uber src
+        ...
+    }
+}
+<pre
+
+Which can be tested / run against a given build file with:
+
+pre>
+buildType 	:= Env.cur.compileScript(`build.fan`.toFile)
+build		:= (BuildPod) buildType.make
+task		:= UberPodTask(build)
+task.run()
+<pre
+
+Unlike .jar files and Java classes, we can't just zip up all the compiled bytecode in to a .pod file - because in Fantom, the .pod file itself denotes the namespace. So instead we'll have to:
+
+ - create a new build directory (I would suggest something like 'build/afUberPod/fan')
+ - copy over all the current Fantom source (see 'BuildPod.srcDirs')
+ - copy over all the source code from within the pods mentioned in "afUberPod.pods". We can assume src code is held within the pods. (It may be nice to have a separate src dir for each pod)
+ - update the 'BuildPod.srcDirs' to contain the new src dirs, which replace the old ones
+ - in a similar way, the 'BuildPod.resDirs' would also need to be copied and updated.
+
+It would then be up to the compiler to compile the Fantom project (the BuildPod script) in the usual way. Only with the new src dir tree, all the Fantom projects / pods would be compiled into the one UBER POD!
+
+Caveats are:
+
+ - All 'using' statements that reference a contained pod will need to be deleted. For expedience, these can be assumed to be one per line, and at the top of the .fan src file.
+
+ - Beware of 'using ClassA as ClassB' statements (these can be converted in round 2)
+
+ - All .fan file names should be unique across all src directories (just warn if found)
+
+ - All class names should be unique across all fan src files (just warn if found)
+
+The compiler WILL baulk at any naming conflicts but it'd be nice if UberJar could warn us first. That way, we're half way to implementing a fix!
+
+The last caveat (class name conflict) could be problematic - but also difficult to fix (lots of src code manipulation / search & replace). But for the first release we can get away with it, as the pods I'm looking to combine have pretty unique class names.
+
+For example disk operations, have a look at: `https://github.com/SlimerDude/afDos/blob/master/fan/DosOps.fan` The library itself was never completed - the idea being that DosTerminal ran commands that were always relative to some *current directory* much like the cmd prompt.
+
+I think the core problem, file copying and a bit of string manipulation, should be pretty easy. I suspect the difficult part for a new-comer will be understanding the Fantom pods and the build process.
+
