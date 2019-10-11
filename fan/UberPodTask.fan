@@ -97,12 +97,6 @@ class UberPodTask : Task {
 				usings2.any { fanLine.startsWith(it) }
 			}
 
-			// TODO make classes, enums, & mixins internal
-//			newSrc.each |fanLine| {
-//				if (fanLine.contains("class "))
-//					echo(fanLine)
-//			}
-			
 			// TODO deal with "using XXX as YYY" statements - should be fine to use proj pod name, e.g. 
 			// using afUberPod::TestUberPodTask as Dude
 			
