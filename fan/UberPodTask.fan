@@ -43,11 +43,9 @@ class UberPodTask : Task {
 	}
 	
 	
-	Str[] transPodNamesTodo		:= Str[,]
-	Str[] transPodNamesDone		:= Str[,]
 	private Void findTransDepends() {
-		transPodNamesTodo = uberPodNames.dup.rw
-		transPodNamesDone = build.depends.map { Depend(it).name }.removeAll(transPodNamesTodo)
+		transPodNamesTodo := uberPodNames.dup.rw
+		transPodNamesDone := build.depends.map { Depend(it).name }.removeAll(transPodNamesTodo)
 
 		while (transPodNamesTodo.size > 0) {
 			transPodName := transPodNamesTodo.removeAt(0)
