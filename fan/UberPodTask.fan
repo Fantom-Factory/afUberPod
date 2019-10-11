@@ -103,6 +103,9 @@ class UberPodTask : Task {
 //					echo(fanLine)
 //			}
 			
+			// TODO deal with "using XXX as YYY" statements - should be fine to use proj pod name, e.g. 
+			// using afUberPod::TestUberPodTask as Dude
+			
 			if (fanSrc.size != newSrc.size)
 				fanFile.out.writeChars(newSrc.join("\n")).flush.close
 		}
