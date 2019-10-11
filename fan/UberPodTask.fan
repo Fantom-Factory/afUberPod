@@ -1,22 +1,23 @@
 using build::BuildPod
 using build::Task
 
+**
+** pre>
+** meta["afUberPod.pods"] = "afFom afEfan"
+** <pre
+** 
 class UberPodTask : Task {
-	private static const Str[] dirsToIgnore	:= "src fcode doc".split
-	
 	private BuildPod	build
 	private File		uberDir
 	private Str[]		allPodNames
 	private Str[]		uberPodNames
 	private Uri[]		uberSrcDirs
-	private Uri[]		uberResDirs
 
 	new make(BuildPod build) : super(script) {
 		this.build			= build
 		this.uberDir		= `buildy/afUberPod/`.toFile
 		this.uberPodNames	= build.meta["afUberPod.pods"]?.split ?: Str#.emptyList
 		this.uberSrcDirs	= Uri[,]
-		this.uberResDirs	= Uri[,]
 		this.allPodNames	= uberPodNames.dup.rw.add(build.podName)
 	}
 
@@ -39,7 +40,6 @@ class UberPodTask : Task {
 		uberSrcDir	:= uberDir + podName.toUri.plusSlash
 		uberSrcDir.listFiles.each |fanFile| {
 			if (fanFile.ext != "fan") return
-			modied := false
 			fanSrc := fanFile.readAllLines
 			newSrc := fanSrc.exclude |fanLine| {
 				usings1.any { fanLine == it } ||
@@ -72,8 +72,8 @@ class UberPodTask : Task {
 			try {
 				podZip.contents.each |file, uri| {
 					if (uri.path.first != "src")				return
-					if (uri.basename.endsWith("Test"))			return
-					if (uri.basename.startsWith("Test"))		return
+					if (uri.basename.endsWith("Test"))			return	// sometimes test code sneaks in with the source!
+					if (uri.basename.startsWith("Test"))		return	// sometimes test code sneaks in with the source!
 					uberDstDir := uberPodDir + uri.relTo(`/src/`)
 					file.copyTo(uberDstDir)
 					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
