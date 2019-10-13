@@ -5,7 +5,7 @@ using build::Task
 ** pre>
 ** meta["afBuild.uberPods"] = "afFom afEfan"
 ** <pre
-** 
+**
 class UberPodTask : Task {
 	private BuildPod	build
 	private File		uberDir
@@ -41,8 +41,7 @@ class UberPodTask : Task {
 			uberPodNames.any { dep.name == it }
 		}.map { it.toStr }
 	}
-	
-	
+
 	private Void findTransDepends() {
 		transPodNamesTodo := uberPodNames.dup.rw
 		transPodNamesDone := build.depends.map { Depend(it).name }.removeAll(transPodNamesTodo)
@@ -71,12 +70,14 @@ class UberPodTask : Task {
 						}
 
 					} else {
-						if (!uberPodNames.contains(dep.name))
+						if (!uberPodNames.contains(dep.name)) {
 							uberPodNames.add(dep.name)
+							transPodNamesTodo.add(dep.name)
+						}
 					}
 
-					transPodNamesDone.add(dep.name)
 				}
+				transPodNamesDone.add(transPodName)
 
 			}.close
 		}
@@ -95,9 +96,9 @@ class UberPodTask : Task {
 				usings2.any { fanLine.startsWith(it) }
 			}
 
-			// TODO deal with "using XXX as YYY" statements - should be fine to use proj pod name, e.g. 
+			// TODO deal with "using XXX as YYY" statements - should be fine to use proj pod name, e.g.
 			// using afUberPod::TestUberPodTask as Dude
-			
+
 			if (fanSrc.size != newSrc.size)
 				fanFile.out.writeChars(newSrc.join("\n")).flush.close
 		}
@@ -114,7 +115,7 @@ class UberPodTask : Task {
 			uberPodDir	:= uberDir + podName.toUri.plusSlash
 			podFile 	:= Env.cur.findPodFile(podName)
 			podZip		:= Zip.open(podFile)
-			
+
 			try {
 				if (podZip.contents[`/meta.props`].readProps["pod.docSrc"] != "true")
 					build.log.warn("$podName has NO src files!")
