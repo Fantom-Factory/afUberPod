@@ -8,21 +8,23 @@ using build::Task
 **
 class UberPodTask : Task {
 	private BuildPod	build
-	private File		uberDir
 	private Str[]		allPodNames
+	private SystemPods	sysPods
+	private File		uberDir
 	private Str[]		uberPodNames
 	private Uri[]		uberSrcDirs
 	private Depend[]	uberDepends
-	private SystemPods	sysPods
+	private Depend[]	uberedPods
 
 	new make(BuildPod build) : super(script) {
 		this.build			= build
-		this.uberDir		= `build/afUberPod/`.toFile
-		this.uberPodNames	= build.meta["afBuild.uberPods"]?.split ?: Str#.emptyList
-		this.uberSrcDirs	= Uri[,]
 		this.allPodNames	= Str[,]
-		this.uberDepends	= build.depends.map { Depend(it) }
 		this.sysPods		= SystemPods()
+		this.uberDir		= `build/afUberPod/`.toFile
+		this.uberPodNames	= build.meta["afBuild.uberPod"]?.split ?: Str#.emptyList
+		this.uberSrcDirs	= Uri[,]
+		this.uberDepends	= build.depends.map { Depend(it) }
+		this.uberedPods		= Depend[,]
 	}
 
 	override Void run() {
@@ -40,6 +42,9 @@ class UberPodTask : Task {
 		build.depends = uberDepends.exclude |dep| {
 			uberPodNames.any { dep.name == it }
 		}.map { it.toStr }
+
+		// it's useful to know exactly which versions were bundled
+		build.meta["afBuild.uberPod.bundled"] = uberedPods.join("; ")
 	}
 
 	private Void findTransDepends() {
@@ -106,6 +111,7 @@ class UberPodTask : Task {
 
 	private Void explodePods() {
 		build.srcDirs?.each |srcDirUrl| {
+			build.log.info("UberPod - exploding $build.podName ...")
 			uberSrcDir := uberDir + build.podName.toUri.plusSlash
 			srcDirUrl.toFile.listFiles.each { it.copyTo(uberSrcDir + it.name.toUri) }
 			uberSrcDirs.add(uberSrcDir.uri.relTo(build.scriptDir.uri))
@@ -117,7 +123,8 @@ class UberPodTask : Task {
 			podZip		:= Zip.open(podFile)
 
 			try {
-				if (podZip.contents[`/meta.props`].readProps["pod.docSrc"] != "true")
+				podMeta	:= podZip.contents[`/meta.props`].readProps
+				if (podMeta["pod.docSrc"] != "true")
 					build.log.warn("$podName has NO src files!")
 				else
 					build.log.info("UberPod - exploding $podName ...")
@@ -130,6 +137,8 @@ class UberPodTask : Task {
 					file.copyTo(uberDstDir)
 					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
 				}
+
+				uberedPods.add(Depend(podName + " " + podMeta["pod.version"]))
 			} finally
 				podZip.close
 		}
