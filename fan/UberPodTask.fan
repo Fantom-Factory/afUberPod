@@ -97,15 +97,21 @@ class UberPodTask : Task {
 			if (fanFile.ext != "fan") return
 			fanSrc := fanFile.readAllLines
 			newSrc := fanSrc.exclude |fanLine| {
-				usings1.any { fanLine == it } ||
-				usings2.any { fanLine.startsWith(it) }
+				usings1.any { fanLine == it }
 			}
 
-			// TODO deal with "using XXX as YYY" statements - should be fine to use proj pod name, e.g.
-			// using afUberPod::TestUberPodTask as Dude
+			// deal with "using XXX as YYY" statements
+			mewAlt := false
+			mewSrc := newSrc.map |fanLine| {
+				if (usings2.any { fanLine.startsWith(it) }) {
+					mewAlt = true
+					return "using ${build.podName}" + fanLine[fanLine.index("::")..-1]
+				}
+				return fanLine
+			}
 
-			if (fanSrc.size != newSrc.size)
-				fanFile.out.writeChars(newSrc.join("\n")).flush.close
+			if (fanSrc.size != mewSrc.size || mewAlt)
+				fanFile.out.writeChars(mewSrc.join("\n")).flush.close
 		}
 	}
 
