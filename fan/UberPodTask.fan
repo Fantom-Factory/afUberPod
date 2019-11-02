@@ -3,7 +3,7 @@ using build::Task
 
 **
 ** pre>
-** meta["afBuild.uberPods"] = "afFom afEfan"
+** meta["afBuild.uberPods"] = "afFom afEfan afConcurrent/AtomicMap.fan"
 ** <pre
 **
 class UberPodTask : Task {
@@ -12,6 +12,7 @@ class UberPodTask : Task {
 	private SystemPods	sysPods
 	private File		uberDir
 	private Str[]		uberPodNames
+	private Str:Str[]	uberFilenames
 	private Uri[]		uberSrcDirs
 	private Depend[]	uberDepends
 	private Depend[]	uberedPods
@@ -22,9 +23,29 @@ class UberPodTask : Task {
 		this.sysPods		= SystemPods()
 		this.uberDir		= `build/afUberPod/`.toFile
 		this.uberPodNames	= build.meta["afBuild.uberPod"]?.split ?: Str#.emptyList
+		this.uberFilenames	= [Str:Str[]][:] { it.def = Str#.emptyList }
 		this.uberSrcDirs	= Uri[,]
 		this.uberDepends	= build.depends.map { Depend(it) }
 		this.uberedPods		= Depend[,]
+
+		// split up names like afConcurrent/AtomicMap.fan
+		uberPodNames = uberPodNames.map |podName| {
+			if (podName.contains("/")) {
+				split	 := podName.split('/')
+				podName	  = split[0]
+				fileName := split[1]
+				if (!fileName.contains("."))
+					fileName = fileName + ".fan"	// assume source files if not specified
+				uberFilenames[podName] = uberFilenames[podName].rw.add(fileName)
+			}
+			return podName
+		}.unique
+
+		// ensure afConcurrent/* will include everything
+		uberFilenames.keys.each |pod| {
+			if (uberFilenames[pod].any { it == "*" })
+				uberFilenames.remove(pod)
+		}
 	}
 
 	override Void run() {
@@ -45,6 +66,7 @@ class UberPodTask : Task {
 
 		// it's useful to know exactly which versions were bundled
 		build.meta["afBuild.uberPod.bundled"] = uberedPods.join("; ")
+		build.log.info("UberPod - Ubered " + uberedPods.join(", "))
 	}
 
 	private Void findTransDepends() {
@@ -116,8 +138,8 @@ class UberPodTask : Task {
 	}
 
 	private Void explodePods() {
+		build.log.info("UberPod - exploding $build.podName ...")
 		build.srcDirs?.each |srcDirUrl| {
-			build.log.info("UberPod - exploding $build.podName ...")
 			uberSrcDir := uberDir + build.podName.toUri.plusSlash
 			srcDirUrl.toFile.listFiles.each { it.copyTo(uberSrcDir + it.name.toUri) }
 			uberSrcDirs.add(uberSrcDir.uri.relTo(build.scriptDir.uri))
@@ -135,10 +157,12 @@ class UberPodTask : Task {
 				else
 					build.log.info("UberPod - exploding $podName ...")
 
+				includeFiles := uberFilenames[podName]
 				podZip.contents.each |file, uri| {
+					if (includeFiles.size > 0 && !includeFiles.any { it == uri.name }) return
 					if (uri.path.first != "src")				return
-					if (uri.basename.endsWith("Test"))			return	// sometimes test code sneaks in with the source!
-					if (uri.basename.startsWith("Test"))		return	// sometimes test code sneaks in with the source!
+					if (uri.basename.endsWith("Test"))			return	// sometimes (in dev pods) test code sneaks in with the source!
+					if (uri.basename.startsWith("Test"))		return	// sometimes (in dev pods) test code sneaks in with the source!
 					uberDstDir := uberPodDir + uri.relTo(`/src/`)
 					file.copyTo(uberDstDir)
 					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
