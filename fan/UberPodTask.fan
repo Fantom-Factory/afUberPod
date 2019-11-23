@@ -10,18 +10,20 @@ class UberPodTask : Task {
 	private BuildPod	build
 	private Str[]		allPodNames
 	private SystemPods	sysPods
-	private File		uberDir
+	private MyDir		uberDir
 	private Str[]		uberPodNames
 	private Str:Str[]	uberFilenames
 	private Uri[]		uberSrcDirs
 	private Depend[]	uberDepends
 	private Depend[]	uberedPods
-
-	new make(BuildPod build) : super(script) {
+	private MyEnv		myEnv
+	
+	new make(BuildPod build, MyEnv? myEnv := null) : super(script) {
 		this.build			= build
+		this.myEnv			= myEnv ?: MyEnv()
 		this.allPodNames	= Str[,]
 		this.sysPods		= SystemPods()
-		this.uberDir		= `build/afUberPod/`.toFile
+		this.uberDir		= MyDir(`build/afUberPod/`)
 		this.uberPodNames	= build.meta["afBuild.uberPod"]?.split ?: Str#.emptyList
 		this.uberFilenames	= [Str:Str[]][:] { it.def = Str#.emptyList }
 		this.uberSrcDirs	= Uri[,]
@@ -77,12 +79,8 @@ class UberPodTask : Task {
 			transPodName := transPodNamesTodo.removeAt(0)
 			if (transPodNamesDone.contains(transPodName)) continue
 
-			podFile := Env.cur.findPodFile(transPodName)
-			Zip.open(podFile) {
-				meta := it.contents[`/meta.props`].readProps
-				deps := (Depend[]) meta["pod.depends"].split(';').map { Depend(it) }
-
-				deps.each |dep| {
+			myEnv.findPodFile(transPodName).open {
+				it.depends.each |dep| {
 					if (transPodNamesDone.contains(dep.name)) return
 
 					if (sysPods.isSysPod(dep.name) || sysPods.isSkyPod(dep.name)) {
@@ -102,11 +100,9 @@ class UberPodTask : Task {
 							transPodNamesTodo.add(dep.name)
 						}
 					}
-
 				}
 				transPodNamesDone.add(transPodName)
-
-			}.close
+			}
 		}
 		allPodNames	= uberPodNames.dup.rw.add(build.podName)
 	}
@@ -133,7 +129,7 @@ class UberPodTask : Task {
 			}
 
 			if (fanSrc.size != mewSrc.size || mewAlt)
-				fanFile.out.writeChars(mewSrc.join("\n")).flush.close
+				fanFile.write(mewSrc.join("\n"))
 		}
 	}
 
@@ -141,36 +137,28 @@ class UberPodTask : Task {
 		build.log.info("UberPod - exploding $build.podName ...")
 		build.srcDirs?.each |srcDirUrl| {
 			uberSrcDir := uberDir + build.podName.toUri.plusSlash
-			srcDirUrl.toFile.listFiles.each { it.copyTo(uberSrcDir + it.name.toUri) }
+			MyDir(srcDirUrl).listFiles.each { it.copyTo(uberSrcDir + it.name.toUri) }
 			uberSrcDirs.add(uberSrcDir.uri.relTo(build.scriptDir.uri))
 		}
 
 		uberPodNames.each |podName| {
 			uberPodDir	:= uberDir + podName.toUri.plusSlash
-			podFile 	:= Env.cur.findPodFile(podName)
-			podZip		:= Zip.open(podFile)
-
-			try {
-				podMeta	:= podZip.contents[`/meta.props`].readProps
-				if (podMeta["pod.docSrc"] != "true")
+			myEnv.findPodFile(podName).open {
+				if (it.hasSrcFiles)
 					build.log.warn("$podName has NO src files!")
 				else
 					build.log.info("UberPod - exploding $podName ...")
 
 				includeFiles := uberFilenames[podName]
-				podZip.contents.each |file, uri| {
+				it.eachSrcFile |file, uri| {
 					if (includeFiles.size > 0 && !includeFiles.any { it == uri.name }) return
-					if (uri.path.first != "src")				return
-					if (uri.basename.endsWith("Test"))			return	// sometimes (in dev pods) test code sneaks in with the source!
-					if (uri.basename.startsWith("Test"))		return	// sometimes (in dev pods) test code sneaks in with the source!
 					uberDstDir := uberPodDir + uri.relTo(`/src/`)
 					file.copyTo(uberDstDir)
 					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
 				}
 
-				uberedPods.add(Depend(podName + " " + podMeta["pod.version"]))
-			} finally
-				podZip.close
+				uberedPods.add(it.asDepend)
+			}
 		}
 	}
 }

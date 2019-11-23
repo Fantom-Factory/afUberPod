@@ -16,6 +16,9 @@ class Build : BuildPod {
 		depends = [
 			"sys   1.0.70 - 1.0",
 			"build 1.0.70 - 1.0",
+			
+			// ---- testing ----
+			"concurrent 1.0.70 - 1.0",
 		]
 
 		srcDirs = [`fan/`, `test/`]
@@ -23,5 +26,7 @@ class Build : BuildPod {
 
 		docApi = true
 		docSrc = true
+		
+		meta["afBuild.testPods"] = "concurrent"
 	}
 }
