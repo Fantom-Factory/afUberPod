@@ -1,4 +1,52 @@
 
 Overview
 ********
-afUberPod - My Awesome uberPod project
+'Uber Pod' is an build task that combines the source code from multiple POD's into a single Uber Pod!
+
+Features:
+ - Creates a new source directory for each POD that was combined (/build/uberPod/podName/source.fan)
+ - Copies over all source code contained withing main POD
+ - Copies over all sorce code from ubered PODs listed in 'afBuild.uberPod'.
+ - Copies over all transient dependencies of ubered Pods
+ - Updates all using statements that require adjustement.
+ - Compiles new Uber Pod!
+
+Getting Started
+***************
+To make your new uber pod, stub out a new POD.
+
+pre>
+fan build init myUberPod
+<pre
+
+In the 'build.fan' your new pod, add a meta entry that lists all of the PODs you want ubered together.
+
+pre>
+meta = [
+    ... //Other meta here
+    "afBuild.uberPod" : "afBeanUtils afConcurrent"
+]
+<pre
+
+Below 'new make()', add in the override method with the code shown below.
+
+pre>
+override Void compileFan() {
+
+    // Run the UberPodTask build task
+    UberPodTask(this).run
+
+    // Run compilation as normal
+    super.compileFan
+}
+<pre
+
+Now simply build your new pod!
+
+Transient Dependencies
+**********************
+When ubering together PODs that have sub dependencies, UberPodTask will automatically add in all required sorce code for thoes sub dependencies.  It will skip all default fantom source PODs (such as sys).
+
+Conflicts
+*********
+For PODs to be ubered together, all classes and source files must be unique!  If there are any conflicts, the compiler will return errors notifying you of the conflicts.
