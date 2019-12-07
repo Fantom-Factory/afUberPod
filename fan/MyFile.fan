@@ -101,4 +101,8 @@ class MyDir {
 	virtual Void delete() {
 		file.delete
 	}
+
+	virtual Void createDir(Str dirName) {
+		file.createDir(dirName)
+	}
 }
