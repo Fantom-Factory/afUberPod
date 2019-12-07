@@ -52,13 +52,12 @@ class UberPodTask : Task {
 
 	override Void run() {
 		if (uberPodNames.isEmpty) return
-
 		findTransDepends
 
 		uberDir.delete
 		uberDir.create
-
-		explodePods
+		
+		explodePods //Error is here somewhere
 		allPodNames.each { filterPodCode(it) }
 
 		build.srcDirs = uberSrcDirs.unique
@@ -74,12 +73,13 @@ class UberPodTask : Task {
 	private Void findTransDepends() {
 		transPodNamesTodo := uberPodNames.dup.rw
 		transPodNamesDone := build.depends.map { Depend(it).name }.removeAll(transPodNamesTodo)
-
+		
 		while (transPodNamesTodo.size > 0) {
 			transPodName := transPodNamesTodo.removeAt(0)
 			if (transPodNamesDone.contains(transPodName)) continue
 
 			myEnv.findPodFile(transPodName).open {
+				
 				it.depends.each |dep| {
 					if (transPodNamesDone.contains(dep.name)) return
 
@@ -137,22 +137,30 @@ class UberPodTask : Task {
 		build.log.info("UberPod - exploding $build.podName ...")
 		build.srcDirs?.each |srcDirUrl| {
 			uberSrcDir := uberDir + build.podName.toUri.plusSlash
-			MyDir(srcDirUrl).listFiles.each { it.copyTo(uberSrcDir + it.name.toUri) }
-			uberSrcDirs.add(uberSrcDir.uri.relTo(build.scriptDir.uri))
+			if (MyDir(srcDirUrl).listFiles.size == 0)
+			{
+				uberDir = MyDir(`build/afUberPod/`)
+				uberDir.createDir(build.podName)
+			}
+			else
+			{
+				MyDir(srcDirUrl).listFiles.each { 
+					it.copyTo(uberSrcDir + it.name.toUri)
+				}
+				uberSrcDirs.add(uberSrcDir.uri.relTo(build.scriptDir.uri))
+			}
 		}
-
-		uberPodNames.each |podName| {
+		
+		uberPodNames.each |podName| { 
+			uberDir = MyDir(`build/afUberPod/`)
 			uberPodDir	:= uberDir + podName.toUri.plusSlash
+			
 			myEnv.findPodFile(podName).open {
-				if (it.hasSrcFiles)
-					build.log.warn("$podName has NO src files!")
-				else
-					build.log.info("UberPod - exploding $podName ...")
 
 				includeFiles := uberFilenames[podName]
 				it.eachSrcFile |file, uri| {
-					if (includeFiles.size > 0 && !includeFiles.any { it == uri.name }) return
 					uberDstDir := uberPodDir + uri.relTo(`/src/`)
+					
 					file.copyTo(uberDstDir)
 					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
 				}
