@@ -1,16 +1,6 @@
 using build::BuildPod
 
 class TestUberPod : Test {
-	
-	Void testAll() {
-		echo("afUberPod - Testing Basic Features")
-		echo("----------------------------------")
-		testBasic()
-		echo("----------------------------------")
-		echo("afUberPod - Testing Transitive Features")
-		echo("----------------------------------")
-		testTransitive()
-	}
 
 	// Test Basic Functionality :: afReflux -> sys + afBeansUtils + afConcurrent
 	//   1 - Build afReflux
@@ -56,12 +46,12 @@ class TestUberPod : Test {
 		verifyFalse(MyEnvStub.cur.logs.contains("Copied sysFile01.fan to build/afUberPod/sys/sysFile01.fan"))
 
 		//Verify that the source files for afBeansUtils + afConcurrent has been added to 'build.srcDirs'
-		verifyEq(build.srcDirs, [`build/afUberPod/afConcurrent/`, `build/afUberPod/afConcurrent/afBeanUtils/`])
+		verifyEq(build.srcDirs, [`build/afUberPod/afConcurrent/`, `build/afUberPod/afBeanUtils/`])
 		
 		//Verify that all of our source files has been copied over.
 		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon.fan to build/afUberPod/afConcurrent/ConMon.fan"))
 		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon2.fan to build/afUberPod/afConcurrent/ConMon2.fan"))
-		verifyTrue(MyEnvStub.cur.logs.contains("Copied afBeanFile01.fan to build/afUberPod/afConcurrent/afBeanUtils/afBeanFile01.fan"))
+		verifyTrue(MyEnvStub.cur.logs.contains("Copied afBeanFile01.fan to build/afUberPod/afBeanUtils/afBeanFile01.fan"))
 
 		//Verfy that our dependencies are correct
 		verifyFalse(build.depends.contains("afBeanUtils 1.0"))
@@ -86,7 +76,7 @@ class TestUberPod : Test {
 			it.podName	= "afExplorer"
 			it.depends	= ["sys 1.0", "afReflux 1.0"]
 			it.meta	= [
-				"afBuild.uberPod"	: "afReflux"
+				"afBuild.uberPod"	: "afReflux"  //Check afBeanUtils/afBeanFile02.fan in meta, verify that it only brings in that file
 			]
 		}
 		
@@ -122,20 +112,20 @@ class TestUberPod : Test {
 		
 		// Verify that the source file for afRefulx has been copied properly.
 		verifyTrue(MyEnvStub.cur.logs.contains("Copied afRefluxFile01.fan to build/afUberPod/afReflux/afRefluxFile01.fan"))
-
+		
 		// Verify that the source files for the transitive POD's has been copied properly.
-		verifyTrue(MyEnvStub.cur.logs.contains("Copied afBeanFile01.fan to build/afUberPod/afReflux/afBeanUtils/afBeanFile01.fan"))
-		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon.fan to build/afUberPod/afReflux/afBeanUtils/afConcurrent/ConMon.fan"))
-		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon2.fan to build/afUberPod/afReflux/afBeanUtils/afConcurrent/ConMon2.fan"))
+		verifyTrue(MyEnvStub.cur.logs.contains("Copied afBeanFile01.fan to build/afUberPod/afBeanUtils/afBeanFile01.fan"))
+		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon.fan to build/afUberPod/afConcurrent/ConMon.fan"))
+		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon2.fan to build/afUberPod/afConcurrent/ConMon2.fan"))
 
 		//Verify that the source files for the sys POD has not been copied over.
 		verifyFalse(MyEnvStub.cur.logs.contains("Copied sysFile01.fan to build/afUberPod/sys/sysFile01.fan"))
 
 		//Verfiy that the source files for afReflux, afConcurrent, and afBeanUtils has been added to build.srcDirs
-		verifyEq(build.srcDirs, [`build/afUberPod/afReflux/`, `build/afUberPod/afReflux/afBeanUtils/`, `build/afUberPod/afReflux/afBeanUtils/afConcurrent/`])
+		verifyEq(build.srcDirs, [`build/afUberPod/afReflux/`, `build/afUberPod/afBeanUtils/`, `build/afUberPod/afConcurrent/`])
 
 		// Verify the contents of build.depends
-		verifyFalse(build.depends.contains("afReflux 1.0"))
+		verifyFalse(build.depends.contains("afReflux 1.0"))  //TODO: add in false for afConcurrent and afBeanUtils
 		verifyTrue(build.depends.contains("sys 1.0"))
 
 		//Verify that our meta.props 'afBuild.uberPod.bundled is correct'
