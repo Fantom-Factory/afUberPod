@@ -29,7 +29,7 @@ class UberPodTask : Task {
 		this.uberSrcDirs	= Uri[,]
 		this.uberDepends	= build.depends.map { Depend(it) }
 		this.uberedPods		= Depend[,]
-
+		
 		// split up names like afConcurrent/AtomicMap.fan
 		uberPodNames = uberPodNames.map |podName| {
 			if (podName.contains("/")) {
@@ -158,12 +158,29 @@ class UberPodTask : Task {
 			myEnv.findPodFile(podName).open {
 
 				includeFiles := uberFilenames[podName]
-				it.eachSrcFile |file, uri| {
-					uberDstDir := uberPodDir + uri.relTo(`/src/`)
-					
-					file.copyTo(uberDstDir)
-					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
+				if (includeFiles.isEmpty)
+				{
+					it.eachSrcFile |file, uri| {
+						uberDstDir := uberPodDir + uri.relTo(`/src/`)
+						
+						file.copyTo(uberDstDir)
+						uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
+					}
 				}
+				else
+				{
+					it.eachSrcFile |file, uri| {
+						Bool fileFound := includeFiles.contains(file.name)
+						if (fileFound)
+						{
+						    uberDstDir := uberPodDir + uri.relTo(`/src/`)
+						
+						    file.copyTo(uberDstDir)
+						    uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
+						}
+					}
+				}
+				
 
 				uberedPods.add(it.asDepend)
 			}
