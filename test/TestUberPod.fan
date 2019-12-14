@@ -193,6 +193,71 @@ class TestUberPod : Test {
 		//Verify that our meta.props 'afBuild.uberPod.bundled is correct'
 		verifyEq(build.meta["afBuild.uberPod.bundled"], "afConcurrent 1.0; afBeanUtils 1.0")
 	}
+
+	// Test  :: afReflux -> sys + afBeansUtils
+	//   Where, afBeansUtils requires afConcurrent/ConMon.fan
+	//   1 - Build afReflux
+	//   2 - Verify that no source was copied from sys
+	//   3 - Verify that afBeansUtils source directories has been added to build.srcDirs
+	//   4 - Verify that afConcurrent ConMon.fan has been added.
+	//   5 - Verify that afConcurrent ConMon2.fan has not been added.
+	//   6 - Verify that afBeansUtils + afConcurrent has been removed from pod depednencies
+	//   7 - Check "afBuild.uberPod.bundled" meta.
+	Void testTransitivePod() {
+		build		:= MyBuildPod() {
+			it.podName	= "afReflux"
+			it.depends	= ["sys 1.0"]
+			it.meta	= [
+				"afBuild.uberPod"	: "afBeanUtils"
+			]
+		}
+		
+		//Stub out our dependent pods; sys, afConcurrent and afBeansUtils
+		myEnv		:= MyEnvStub([
+			"afConcurrent"	: PodFileStub("afConcurrent") {
+				it.srcFiles	= [
+					MyFileStub.makeStub(`/src/ConMon.fan`),
+					MyFileStub.makeStub(`/src/ConMon2.fan`)
+				]
+			},
+			"afBeanUtils"	: PodFileStub("afBeanUtils") {  
+				it.srcFiles = [
+					MyFileStub.makeStub(`/src/afBeanFile01.fan`)
+				]
+				it.PodMeta = [
+					"afBuild.uberPod"	: "afBeanUtils"
+				]
+			},
+			"sys"	: PodFileStub("sys") {  
+				it.srcFiles = [
+					MyFileStub.makeStub(`/src/sysFile01.fan`)
+				]
+			},
+		])
+		
+		// run the UberPod task
+		uberTask	:= UberPodTask(build, myEnv)
+		uberTask.run
+		
+		// Verify that the sys fan file 'sysFile01.fan' was not copied.
+		verifyFalse(MyEnvStub.cur.logs.contains("Copied sysFile01.fan to build/afUberPod/sys/sysFile01.fan"))
+		
+		//Verify that the source files for afBeansUtils + afConcurrent has been added to 'build.srcDirs'
+		verifyEq(build.srcDirs, [`build/afUberPod/afConcurrent/`, `build/afUberPod/afBeanUtils/`])
+		
+		//Verify that all of our source files has been copied over.
+		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon.fan to build/afUberPod/afConcurrent/ConMon.fan"))
+		verifyFalse(MyEnvStub.cur.logs.contains("Copied ConMon2.fan to build/afUberPod/afConcurrent/ConMon2.fan"))
+		verifyTrue(MyEnvStub.cur.logs.contains("Copied afBeanFile01.fan to build/afUberPod/afBeanUtils/afBeanFile01.fan"))
+
+		//Verfy that our dependencies are correct
+		verifyFalse(build.depends.contains("afBeanUtils 1.0"))
+		verifyFalse(build.depends.contains("afConcurrent 1.0"))
+		verifyTrue(build.depends.contains("sys 1.0"))
+
+		//Verify that our meta.props 'afBuild.uberPod.bundled is correct'
+		verifyEq(build.meta["afBuild.uberPod.bundled"], "afConcurrent 1.0; afBeanUtils 1.0")
+	}
 }
 
 
