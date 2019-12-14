@@ -17,6 +17,8 @@ class UberPodTask : Task {
 	private Depend[]	uberDepends
 	private Depend[]	uberedPods
 	private MyEnv		myEnv
+	private Str[]		allTransPodNames
+	private Str[]		allTransPodFileNames
 	
 	new make(BuildPod build, MyEnv? myEnv := null) : super(script) {
 		this.build			= build
@@ -29,9 +31,12 @@ class UberPodTask : Task {
 		this.uberSrcDirs	= Uri[,]
 		this.uberDepends	= build.depends.map { Depend(it) }
 		this.uberedPods		= Depend[,]
+		this.allTransPodNames = [,]
+		this.allTransPodFileNames = [,]
 		
 		// split up names like afConcurrent/AtomicMap.fan
 		uberPodNames = uberPodNames.map |podName| {
+			
 			if (podName.contains("/")) {
 				split	 := podName.split('/')
 				podName	  = split[0]
@@ -42,7 +47,7 @@ class UberPodTask : Task {
 			}
 			return podName
 		}.unique
-
+		
 		// ensure afConcurrent/* will include everything
 		uberFilenames.keys.each |pod| {
 			if (uberFilenames[pod].any { it == "*" })
@@ -52,12 +57,22 @@ class UberPodTask : Task {
 
 	override Void run() {
 		if (uberPodNames.isEmpty) return
+		
+		/*
+
+		allTransPodNames.unique().each() |transPodName| {
+			uberPodNames = uberPodNames.add(transPodName)
+			echo(uberFilenames[transPodName])
+		} */
+
 		findTransDepends
 
 		uberDir.delete
 		uberDir.create
+
+		explodeTransPods
+		explodePods
 		
-		explodePods //Error is here somewhere
 		allPodNames.each { filterPodCode(it) }
 
 		build.srcDirs = uberSrcDirs.unique
@@ -151,7 +166,7 @@ class UberPodTask : Task {
 			}
 		}
 		
-		uberPodNames.each |podName| { 
+		uberPodNames.each |podName| {
 			uberDir = MyDir(`build/afUberPod/`)
 			uberPodDir	:= uberDir + podName.toUri.plusSlash
 			
@@ -173,9 +188,9 @@ class UberPodTask : Task {
 						Bool fileFound := includeFiles.contains(file.name)
 						if (fileFound)
 						{
-						    uberDstDir := uberPodDir + uri.relTo(`/src/`)
+							uberDstDir := uberPodDir + uri.relTo(`/src/`)
 						
-						    file.copyTo(uberDstDir)
+							file.copyTo(uberDstDir)
 						    uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
 						}
 					}
@@ -183,6 +198,47 @@ class UberPodTask : Task {
 				
 
 				uberedPods.add(it.asDepend)
+			}
+		}
+	}
+
+	private Void explodeTransPods() {
+		uberPodNames.each() |podName| {
+			myEnv.findPodFile(podName).open {
+				if (it.podMeta["afBuild.uberPod"] != null) {
+					it.podMeta["afBuild.uberPod"].split(' ').each() |transPod| {
+						if (transPod.contains("/")) {
+							split	 := transPod.split('/')
+							podName	  = split[0]
+							fileName := split[1]
+							if (!fileName.contains("."))
+								fileName = fileName + ".fan"	// assume source files if not specified
+							uberFilenames[transPod] = uberFilenames[transPod].rw.add(fileName)
+							echo(uberFilenames)
+							allTransPodNames = allTransPodNames.add(podName)
+							allTransPodFileNames = allTransPodFileNames.add(fileName)
+						}
+					}
+				}
+			}
+		}
+		allTransPodNames.unique().each() |transPod| {
+			allPodNames = allPodNames.add(transPod)
+		}
+		allTransPodNames.each() |podName| {
+			uberDir = MyDir(`build/afUberPod/`)
+			uberPodDir	:= uberDir + podName.toUri.plusSlash
+			myEnv.findPodFile(podName).open {
+				it.eachSrcFile |file, uri| {
+					Bool fileFound := allTransPodFileNames.unique().contains(file.name)
+					if (fileFound)
+					{
+						uberDstDir := uberPodDir + uri.relTo(`/src/`)
+					
+						file.copyTo(uberDstDir)
+						uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
+					}
+				}
 			}
 		}
 	}
