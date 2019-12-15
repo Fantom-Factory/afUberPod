@@ -22,7 +22,6 @@ class MyEnvStub : MyEnv {
 
 class PodFileStub : PodFile {
 	override Depend		asDepend
-	override [Str:Str]?	PodMeta
 	override Depend[]	depends	
 			MyFile[]	srcFiles
 
@@ -30,7 +29,6 @@ class PodFileStub : PodFile {
 		this.asDepend	= Depend("$name 1.0")
 		this.depends	= Depend[,]
 		this.srcFiles	= MyFile[,]
-		this.podMeta 	= [:]
 	}
 
 	override Void open(|PodFile| fn) {
