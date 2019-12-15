@@ -7,15 +7,11 @@ class MyEnv {
 
 class PodFile {
 	private File? 		podFile	// nullable for PodFileStub
-	public [Str:Str]?	podMeta
+	public [Str:Str]	podMeta := [:]
 	private [Uri:File]?	contents
 	
 	new make(File? podFile) {
 		this.podFile = podFile
-	}
-
-	virtual [Str:Str]? PodMeta() {
-		podMeta
 	}
 	
 	virtual Depend[] depends() {
