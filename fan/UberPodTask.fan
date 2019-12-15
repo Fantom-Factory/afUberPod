@@ -16,6 +16,7 @@ class UberPodTask : Task {
 	private Uri[]		uberSrcDirs
 	private Depend[]	uberDepends
 	private Depend[]	uberedPods
+	private Depend[]    uberedTransDepends
 	private MyEnv		myEnv
 	private Str[]		allTransPodNames
 	private Str[]		allTransPodFileNames
@@ -33,6 +34,7 @@ class UberPodTask : Task {
 		this.uberedPods		= Depend[,]
 		this.allTransPodNames = [,]
 		this.allTransPodFileNames = [,]
+		this.uberedTransDepends = Depend[,]
 		
 		// split up names like afConcurrent/AtomicMap.fan
 		uberPodNames = uberPodNames.map |podName| {
@@ -57,13 +59,6 @@ class UberPodTask : Task {
 
 	override Void run() {
 		if (uberPodNames.isEmpty) return
-		
-		/*
-
-		allTransPodNames.unique().each() |transPodName| {
-			uberPodNames = uberPodNames.add(transPodName)
-			echo(uberFilenames[transPodName])
-		} */
 
 		findTransDepends
 
@@ -79,7 +74,7 @@ class UberPodTask : Task {
 		build.depends = uberDepends.exclude |dep| {
 			uberPodNames.any { dep.name == it }
 		}.map { it.toStr }
-
+		
 		// it's useful to know exactly which versions were bundled
 		build.meta["afBuild.uberPod.bundled"] = uberedPods.join("; ")
 		build.log.info("UberPod - Ubered " + uberedPods.join(", "))
@@ -214,9 +209,10 @@ class UberPodTask : Task {
 							if (!fileName.contains("."))
 								fileName = fileName + ".fan"	// assume source files if not specified
 							uberFilenames[transPod] = uberFilenames[transPod].rw.add(fileName)
-							echo(uberFilenames)
 							allTransPodNames = allTransPodNames.add(podName)
 							allTransPodFileNames = allTransPodFileNames.add(fileName)
+						} else {
+							allTransPodNames = allTransPodNames.add(transPod + "/all")
 						}
 					}
 				}
@@ -226,17 +222,45 @@ class UberPodTask : Task {
 			allPodNames = allPodNames.add(transPod)
 		}
 		allTransPodNames.each() |podName| {
+			Bool addAll := false
+			if (podName.contains("/")) {
+				addAll = true
+				podName = podName.split('/')[0]
+			}
 			uberDir = MyDir(`build/afUberPod/`)
 			uberPodDir	:= uberDir + podName.toUri.plusSlash
 			myEnv.findPodFile(podName).open {
 				it.eachSrcFile |file, uri| {
-					Bool fileFound := allTransPodFileNames.unique().contains(file.name)
-					if (fileFound)
-					{
+					if (addAll) {
 						uberDstDir := uberPodDir + uri.relTo(`/src/`)
-					
+						
 						file.copyTo(uberDstDir)
 						uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
+					} else {
+						Bool fileFound := allTransPodFileNames.unique().contains(file.name)
+						if (fileFound)
+						{
+							uberDstDir := uberPodDir + uri.relTo(`/src/`)
+						
+							file.copyTo(uberDstDir)
+							uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
+						}
+					}
+					
+				}
+				uberedPods.add(it.asDepend)
+				it.depends.each |dep| { 
+					if (sysPods.isSysPod(dep.name) || sysPods.isSkyPod(dep.name)) {
+						// need to add this to build.deps
+						udep := uberDepends.find { it.name == dep.name }
+						if (udep != null) {
+							// keep the newest dependency
+							if (dep.version > udep.version)
+								uberDepends.add(dep).remove(udep)
+						} else {
+							uberDepends.add(dep)
+						}
+
 					}
 				}
 			}
