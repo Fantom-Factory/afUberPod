@@ -224,8 +224,8 @@ class TestUberPod : Test {
 				it.srcFiles = [
 					MyFileStub.makeStub(`/src/afBeanFile01.fan`)
 				]
-				it.PodMeta = [
-					"afBuild.uberPod"	: "afBeanUtils"
+				it.podMeta = [
+					"afBuild.uberPod"	: "afConcurrent/ConMon.fan"
 				]
 			},
 			"sys"	: PodFileStub("sys") {  
