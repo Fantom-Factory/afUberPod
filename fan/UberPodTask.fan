@@ -89,45 +89,16 @@ class UberPodTask : Task {
 	
 	** Returns a list of *ALL* dependent pods (including transitive dependencies) EXCEPT pods that will be ubered.
 	private Str[] flattenDepends() {
-		inspected	:= Str[,]
-		toInspect	:= build.depends.map { Depend(it).name }.removeAll(uberPodNames)
-		
-		while (toInspect.size > 0) {
-			podName := toInspect.removeAt(0)
-			if (inspected.contains(podName)) continue
-			
-			inspected.add(podName)
-			myEnv.findPodFile(podName).open {
-				toInspect.addAll(it.depends.map { it.name })
-			}
-		}
-
-		return inspected
+		toInspect := build.depends.map { Depend(it).name }.removeAll(uberPodNames)
+		return collectDependencies(toInspect, Str[,]) |podName| { true }
 	}
 	
 	private Void findTransDepends() {
 		inspected := flattenDepends		// we don't inspect / uber pods that are hard dependencies
 		toInspect := uberPodNames.dup.rw
+		collected := collectDependencies(toInspect, Str[,]) |podName| { !sysPods.isSysPod(podName) && !sysPods.isSkyPod(podName) }
 		
-		while (toInspect.size > 0) {
-			transPodName := toInspect.removeAt(0)
-			if (inspected.contains(transPodName)) continue
-
-			myEnv.findPodFile(transPodName).open {
-				
-				it.depends.each |dep| {
-					if (inspected.contains(dep.name)) return
-
-					if (!sysPods.isSysPod(dep.name) && !sysPods.isSkyPod(dep.name)) {
-						if (!uberPodNames.contains(dep.name)) {
-							uberPodNames.add(dep.name)
-							toInspect.add(dep.name)
-						}
-					}
-				}
-				inspected.add(transPodName)
-			}
-		}
+		uberPodNames.addAll(collected)
 		allPodNames	= uberPodNames.dup.rw.add(build.podName)
 	}
 
@@ -265,5 +236,28 @@ class UberPodTask : Task {
 				uberedPods.add(it.asDepend)
 			}
 		}
+	}
+	
+	** Walks the dependency tree, calling 'collect' on each depends.
+	private Str[] collectDependencies(Str[] podNames, Str[] podsToIgnore, |Str podName->Bool| collect) {
+		inspected := podsToIgnore.dup.rw
+		toInspect := podNames.dup.rw
+		collected := Str[,]
+		
+		while (toInspect.size > 0) {
+			podName := toInspect.removeAt(0)
+			if (inspected.contains(podName)) continue
+			inspected.add(podName)
+
+			myEnv.findPodFile(podName).open {				
+				it.depends.each |dep| {
+					toInspect.add(dep.name)
+
+					if (collect(dep.name))
+						collected.add(dep.name)
+				}
+			}
+		}
+		return collected
 	}
 }
