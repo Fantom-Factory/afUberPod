@@ -14,7 +14,6 @@ class UberPodTask : Task {
 	private Str[]		uberPodNames
 	private Str:Str[]	uberFilenames
 	private Uri[]		uberSrcDirs
-	private Depend[]	uberDepends
 	private Depend[]	uberedPods
 	private Depend[]    uberedTransDepends
 	private MyEnv		myEnv
@@ -30,7 +29,6 @@ class UberPodTask : Task {
 		this.uberPodNames	= build.meta["afBuild.uberPod"]?.split ?: Str#.emptyList
 		this.uberFilenames	= [Str:Str[]][:] { it.def = Str#.emptyList }
 		this.uberSrcDirs	= Uri[,]
-		this.uberDepends	= build.depends.map { Depend(it) }
 		this.uberedPods		= Depend[,]
 		this.allTransPodNames = [,]
 		this.allTransPodFileNames = [,]
@@ -45,8 +43,12 @@ class UberPodTask : Task {
 				fileName := split[1]
 				if (!fileName.contains("."))
 					fileName = fileName + ".fan"	// assume source files if not specified
+
 				uberFilenames[podName] = uberFilenames[podName].rw.add(fileName)
 			}
+			
+			// FIXME else add /*
+			
 			return podName
 		}.unique
 		
@@ -55,6 +57,10 @@ class UberPodTask : Task {
 			if (uberFilenames[pod].any { it == "*" })
 				uberFilenames.remove(pod)
 		}
+		
+		
+//		uberPodNames = init pods
+//		uberFilenames = init files in pod
 	}
 
 	override Void run() {
@@ -71,7 +77,7 @@ class UberPodTask : Task {
 		allPodNames.each { filterPodCode(it) }
 
 		build.srcDirs = uberSrcDirs.unique
-		build.depends = uberDepends.exclude |dep| {
+		build.depends = build.depends.map { Depend(it) }.exclude |Depend dep->Bool| {
 			uberPodNames.any { dep.name == it }
 		}.map { it.toStr }
 		
@@ -80,38 +86,46 @@ class UberPodTask : Task {
 		build.log.info("UberPod - Ubered " + uberedPods.join(", "))
 	}
 
-	private Void findTransDepends() {
-		transPodNamesTodo := uberPodNames.dup.rw
-		transPodNamesDone := build.depends.map { Depend(it).name }.removeAll(transPodNamesTodo)
+	
+	** Returns a list of *ALL* dependent pods (including transitive dependencies) EXCEPT pods that will be ubered.
+	private Str[] flattenDepends() {
+		inspected	:= Str[,]
+		toInspect	:= build.depends.map { Depend(it).name }.removeAll(uberPodNames)
 		
-		while (transPodNamesTodo.size > 0) {
-			transPodName := transPodNamesTodo.removeAt(0)
-			if (transPodNamesDone.contains(transPodName)) continue
+		while (toInspect.size > 0) {
+			podName := toInspect.removeAt(0)
+			if (inspected.contains(podName)) continue
+			
+			inspected.add(podName)
+			myEnv.findPodFile(podName).open {
+				toInspect.addAll(it.depends.map { it.name })
+			}
+		}
+
+		return inspected
+	}
+	
+	private Void findTransDepends() {
+		inspected := flattenDepends		// we don't inspect / uber pods that are hard dependencies
+		toInspect := uberPodNames.dup.rw
+		
+		while (toInspect.size > 0) {
+			transPodName := toInspect.removeAt(0)
+			if (inspected.contains(transPodName)) continue
 
 			myEnv.findPodFile(transPodName).open {
 				
 				it.depends.each |dep| {
-					if (transPodNamesDone.contains(dep.name)) return
+					if (inspected.contains(dep.name)) return
 
-					if (sysPods.isSysPod(dep.name) || sysPods.isSkyPod(dep.name)) {
-						// need to add this to build.deps
-						udep := uberDepends.find { it.name == dep.name }
-						if (udep != null) {
-							// keep the newest dependency
-							if (dep.version > udep.version)
-								uberDepends.add(dep).remove(udep)
-						} else {
-							uberDepends.add(dep)
-						}
-
-					} else {
+					if (!sysPods.isSysPod(dep.name) && !sysPods.isSkyPod(dep.name)) {
 						if (!uberPodNames.contains(dep.name)) {
 							uberPodNames.add(dep.name)
-							transPodNamesTodo.add(dep.name)
+							toInspect.add(dep.name)
 						}
 					}
 				}
-				transPodNamesDone.add(transPodName)
+				inspected.add(transPodName)
 			}
 		}
 		allPodNames	= uberPodNames.dup.rw.add(build.podName)
@@ -212,7 +226,7 @@ class UberPodTask : Task {
 							allTransPodNames = allTransPodNames.add(podName)
 							allTransPodFileNames = allTransPodFileNames.add(fileName)
 						} else {
-							allTransPodNames = allTransPodNames.add(transPod + "/all")
+							allTransPodNames = allTransPodNames.add(transPod)
 						}
 					}
 				}
@@ -222,7 +236,7 @@ class UberPodTask : Task {
 			allPodNames = allPodNames.add(transPod)
 		}
 		allTransPodNames.each() |podName| {
-			Bool addAll := false
+			addAll := false
 			if (podName.contains("/")) {
 				addAll = true
 				podName = podName.split('/')[0]
@@ -249,20 +263,6 @@ class UberPodTask : Task {
 					
 				}
 				uberedPods.add(it.asDepend)
-				it.depends.each |dep| { 
-					if (sysPods.isSysPod(dep.name) || sysPods.isSkyPod(dep.name)) {
-						// need to add this to build.deps
-						udep := uberDepends.find { it.name == dep.name }
-						if (udep != null) {
-							// keep the newest dependency
-							if (dep.version > udep.version)
-								uberDepends.add(dep).remove(udep)
-						} else {
-							uberDepends.add(dep)
-						}
-
-					}
-				}
 			}
 		}
 	}
