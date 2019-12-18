@@ -26,7 +26,7 @@ class PodFile {
 		Depend(podMeta["pod.name"] + " " + podMeta["pod.version"])
 	}
 
-	virtual Void open(|PodFile| fn) {
+	virtual Obj? open(|PodFile->Obj?| fn) {
 		// should really move close to a finally - meh
 		Zip.open(podFile) {
 			this.contents	= it.contents
@@ -82,8 +82,7 @@ class MyDir {
 	
 	@Operator
 	virtual This plus(Uri path) {
-		file = file + path
-		return this
+		MyDir((file + path).uri)
 	}
 	
 	virtual MyFile[] listFiles() {

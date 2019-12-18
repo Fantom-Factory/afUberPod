@@ -31,7 +31,7 @@ class PodFileStub : PodFile {
 		this.srcFiles	= MyFile[,]
 	}
 
-	override Void open(|PodFile| fn) {
+	override Obj? open(|PodFile->Obj?| fn) {
 		fn(this)
 	}
 
@@ -55,7 +55,6 @@ class MyFileStub : MyFile {
 	
 	override Void write(Str content) { }
 	override Void copyTo(MyDir to)	 {
-		echo("$to.uri")
 		MyEnvStub.cur.logs.add("Copied $name to $to.uri")
 	}
 }

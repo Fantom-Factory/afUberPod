@@ -56,7 +56,7 @@ class TestUberPod : Test {
 		//Verfy that our dependencies are correct
 		verifyFalse(build.depends.contains("afBeanUtils 1.0"))
 		verifyFalse(build.depends.contains("afConcurrent 1.0"))
-		verifyTrue(build.depends.contains("sys 1.0"))
+		verifyTrue (build.depends.contains("sys 1.0"))
 
 		//Verify that our meta.props 'afBuild.uberPod.bundled is correct'
 		verifyEq(build.meta["afBuild.uberPod.bundled"], "afConcurrent 1.0; afBeanUtils 1.0")
