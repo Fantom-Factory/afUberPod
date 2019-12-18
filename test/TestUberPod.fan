@@ -77,7 +77,7 @@ class TestUberPod : Test {
 			it.podName	= "afExplorer"
 			it.depends	= ["sys 1.0", "afReflux 1.0"]
 			it.meta	= [
-				"afBuild.uberPod"	: "afReflux"  //Check afBeanUtils/afBeanFile02.fan in meta, verify that it only brings in that file
+				"afBuild.uberPod"	: "afBeanUtils afReflux"  //Check afBeanUtils/afBeanFile02.fan in meta, verify that it only brings in that file
 			]
 		}
 		
