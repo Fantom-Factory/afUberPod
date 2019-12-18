@@ -15,7 +15,7 @@ class PodFile {
 	}
 	
 	virtual Depend[] depends() {
-		podMeta["pod.depends"].split(';').map { Depend(it) }
+		podMeta["pod.depends"]?.split(';')?.map { Depend(it) } ?: Depend#.emptyList
 	}
 	
 	virtual Bool hasSrcFiles() {
@@ -68,8 +68,8 @@ class MyFile {
 		file.out.writeChars(content).flush.close
 	}
 	
-	virtual Void copyTo(MyDir to) {
-		file.copyTo(to.file)
+	virtual Void copyInto(MyDir to) {
+		file.copyInto(to.file)
 	}
 }
 

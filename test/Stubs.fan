@@ -22,12 +22,12 @@ class MyEnvStub : MyEnv {
 
 class PodFileStub : PodFile {
 	override Depend		asDepend
-	override Depend[]	depends	
+//	override Depend[]	depends	
 			MyFile[]	srcFiles
 
 	new make(Str name) : super(null) {
 		this.asDepend	= Depend("$name 1.0")
-		this.depends	= Depend[,]
+//		this.depends	= Depend[,]
 		this.srcFiles	= MyFile[,]
 	}
 
@@ -54,7 +54,7 @@ class MyFileStub : MyFile {
 	}
 	
 	override Void write(Str content) { }
-	override Void copyTo(MyDir to)	 {
+	override Void copyInto(MyDir to)	 {
 		MyEnvStub.cur.logs.add("Copied $name to $to.uri")
 	}
 }
