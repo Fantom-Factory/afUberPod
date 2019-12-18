@@ -84,7 +84,8 @@ class TestUberPod : Test {
 		//Stub out our dependent pods; sys, afConcurrent and afBeansUtils
 		myEnv		:= MyEnvStub([
 			"afReflux"	: PodFileStub("afReflux") {
-				it.podMeta["pod.depends"] = "afBeanUtils 1.0; afConcurrent 1.0"
+				it.podMeta["pod.depends"] 		= "afBeanUtils 1.0; afConcurrent 1.0"
+				it.podMeta["afBuild.uberPod"]	= "afConcurrent/ConMon"
 				it.srcFiles	= [
 					MyFileStub.makeStub(`/src/afRefluxFile01.fan`)
 				]
@@ -115,9 +116,12 @@ class TestUberPod : Test {
 		verifyTrue(MyEnvStub.cur.logs.contains("Copied afRefluxFile01.fan to build/afUberPod/afReflux/"))
 		
 		// Verify that the source files for the transitive POD's has been copied properly.
-		verifyTrue(MyEnvStub.cur.logs.contains("Copied afBeanFile01.fan to build/afUberPod/afBeanUtils/"))
-		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon.fan to build/afUberPod/afConcurrent/"))
-		verifyTrue(MyEnvStub.cur.logs.contains("Copied ConMon2.fan to build/afUberPod/afConcurrent/"))
+echo("----")
+		MyEnvStub.cur.logs.each(#echo.func)
+echo("----")
+		verifyTrue (MyEnvStub.cur.logs.contains("Copied afBeanFile01.fan to build/afUberPod/afBeanUtils/"))
+		verifyTrue (MyEnvStub.cur.logs.contains("Copied ConMon.fan to build/afUberPod/afConcurrent/"))
+		verifyFalse(MyEnvStub.cur.logs.contains("Copied ConMon2.fan to build/afUberPod/afConcurrent/"))
 
 		//Verify that the source files for the sys POD has not been copied over.
 		verifyFalse(MyEnvStub.cur.logs.contains("Copied sysFile01.fan to build/afUberPod/sys/sysFile01.fan"))

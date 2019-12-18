@@ -82,9 +82,6 @@ class UberPodTask : Task {
 
 	private Obj? addUberFilenames(Str:Str[] uberFilenames, Str pName, Str:Str podMeta) {
 		uberMetas := (Str[]) (podMeta["afBuild.uberPod"]?.split ?: Str#.emptyList)
-		if (uberMetas.isEmpty)
-			uberFilenames.getOrAdd(pName) { Str["*"] }
-
 		uberMetas.each |uberMeta| {
 			podName  := uberMeta
 			fileName := "*"
@@ -148,7 +145,7 @@ class UberPodTask : Task {
 					usings1.any { fanLine == it }
 				}
 	
-				// deal with "using XXX as YYY" statements
+				// deal with "using XXXX as YYYY" statements
 				mewAlt := false
 				mewSrc := newSrc.map |fanLine| {
 					if (usings2.any { fanLine.startsWith(it) }) {
