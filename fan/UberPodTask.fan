@@ -8,169 +8,214 @@ using build::Task
 **
 class UberPodTask : Task {
 	private BuildPod	build
-	private Str[]		allPodNames
 	private SystemPods	sysPods
-	private File		uberDir
-	private Str[]		uberPodNames
-	private Str:Str[]	uberFilenames
-	private Uri[]		uberSrcDirs
-	private Depend[]	uberDepends
-	private Depend[]	uberedPods
+	private MyEnv		myEnv
 
-	new make(BuildPod build) : super(script) {
+	new make(BuildPod build, MyEnv? myEnv := null) : super(script) {
 		this.build			= build
-		this.allPodNames	= Str[,]
+		this.myEnv			= myEnv ?: MyEnv()
 		this.sysPods		= SystemPods()
-		this.uberDir		= `build/afUberPod/`.toFile
-		this.uberPodNames	= build.meta["afBuild.uberPod"]?.split ?: Str#.emptyList
-		this.uberFilenames	= [Str:Str[]][:] { it.def = Str#.emptyList }
-		this.uberSrcDirs	= Uri[,]
-		this.uberDepends	= build.depends.map { Depend(it) }
-		this.uberedPods		= Depend[,]
+	}
 
-		// split up names like afConcurrent/AtomicMap.fan
-		uberPodNames = uberPodNames.map |podName| {
-			if (podName.contains("/")) {
-				split	 := podName.split('/')
-				podName	  = split[0]
-				fileName := split[1]
-				if (!fileName.contains("."))
-					fileName = fileName + ".fan"	// assume source files if not specified
-				uberFilenames[podName] = uberFilenames[podName].rw.add(fileName)
+	override Void run() {
+		uberPodNames := (Str[]) (build.meta["afBuild.uberPod"]?.split?.map |podName| {
+			podName.split('/').first
+		} ?: Str#.emptyList)
+
+		if (uberPodNames.isEmpty) return
+
+		topLevelAllDepends		:= build.depends.map { Depend(it).name }
+		topLevelUberDepends		:= uberPodNames
+		topLevelNonUberDepends	:= topLevelAllDepends.removeAll(topLevelUberDepends)
+		allNonUberDepends		:= flattenDepends(topLevelNonUberDepends,	true ).unique
+		allUberDepends			:= flattenDepends(topLevelUberDepends, 		false).unique
+
+		// we need to remove non-uber trans deps from the uber deps (!) think of merging 2 trees
+		allUberDepends			= allUberDepends.removeAll(allNonUberDepends)
+
+		uberDir := MyDir(`build/afUberPod/`)
+		uberDir.delete
+		uberDir.create
+
+		uberFilenames	:= collectUberFilenames(allUberDepends)
+		srcDirs			:= explodePods(uberDir, uberFilenames)
+
+		filterPodCode(uberDir, allUberDepends)
+
+		bundled			:= (Depend[]) allUberDepends.map { myEnv.findPodFile(it).open { it.asDepend } }.sort
+		buildDepends	:= mangleNewDepends(allUberDepends, bundled)
+
+		build.srcDirs	= srcDirs
+		build.depends	= buildDepends.map { it.toStr }
+		build.meta["afBuild.uberPod.bundled"] = bundled.join("; ")
+
+		build.log.info("UberPod - Ubered " + bundled.join(", "))
+	}
+
+	private Depend[] mangleNewDepends(Str[] allUberDepends, Depend[] bundled) {
+		// grab the dependencies of all bundled pods
+		uberDepends 	:= (Depend[]) allUberDepends.map { myEnv.findPodFile(it).open { it.depends } }.flatten
+
+		// grab a unique list of the latest versions
+		uberDependsMap	:= Str:Depend[:]
+		uberDepends.each |newDep| {
+			oldDep := uberDependsMap[newDep.name]
+			if (oldDep == null || newDep.version > oldDep.version)
+				uberDependsMap[newDep.name] = newDep
+		}
+
+		// grab the main pod dependencies
+		buildDepensdMap	:= Str:Depend[:]
+		build.depends.each {
+			buildDepensdMap[Depend(it).name] = Depend(it)
+		}
+
+		// remove the bundled pods themselves
+		bundled.each {
+			uberDependsMap .remove(it.name)
+			buildDepensdMap.remove(it.name)
+		}
+
+		// add any (as-of-yet) unreferenced uber dependencies to the build
+		uberDependsMap.vals.each {
+			if (!buildDepensdMap.containsKey(it.name))
+				buildDepensdMap[it.name] = it
+		}
+
+		return buildDepensdMap.vals.sort |d1, d2| { d1.name <=> d2.name }
+	}
+
+	private Str[] flattenDepends(Str[] podNames, Bool includeSysPods) {
+		collectDependencies(podNames, Str[,]) |podName| {
+			includeSysPods ? true : !sysPods.isSysPod(podName) && !sysPods.isSkyPod(podName)
+		}.addAll(podNames)
+	}
+
+	Str:Str[] collectUberFilenames(Str[] uberPodNames) {
+		uberFilenames	:= [Str:Str[]][:]
+
+		// first collect filenames from the pod we're building
+		addUberFilenames(uberFilenames, build.podName, build.meta)
+
+		// then from all the pods we're ubering up
+		uberPodNames.each |podName| {
+			myEnv.findPodFile(podName).open {
+				addUberFilenames(uberFilenames, podName, it.podMeta)
 			}
-			return podName
-		}.unique
+		}
 
 		// ensure afConcurrent/* will include everything
 		uberFilenames.keys.each |pod| {
 			if (uberFilenames[pod].any { it == "*" })
-				uberFilenames.remove(pod)
+				uberFilenames[pod].clear
 		}
+
+		return uberFilenames
 	}
 
-	override Void run() {
-		if (uberPodNames.isEmpty) return
-
-		findTransDepends
-
-		uberDir.delete
-		uberDir.create
-
-		explodePods
-		allPodNames.each { filterPodCode(it) }
-
-		build.srcDirs = uberSrcDirs.unique
-		build.depends = uberDepends.exclude |dep| {
-			uberPodNames.any { dep.name == it }
-		}.map { it.toStr }
-
-		// it's useful to know exactly which versions were bundled
-		build.meta["afBuild.uberPod.bundled"] = uberedPods.join("; ")
-		build.log.info("UberPod - Ubered " + uberedPods.join(", "))
-	}
-
-	private Void findTransDepends() {
-		transPodNamesTodo := uberPodNames.dup.rw
-		transPodNamesDone := build.depends.map { Depend(it).name }.removeAll(transPodNamesTodo)
-
-		while (transPodNamesTodo.size > 0) {
-			transPodName := transPodNamesTodo.removeAt(0)
-			if (transPodNamesDone.contains(transPodName)) continue
-
-			podFile := Env.cur.findPodFile(transPodName)
-			Zip.open(podFile) {
-				meta := it.contents[`/meta.props`].readProps
-				deps := (Depend[]) meta["pod.depends"].split(';').map { Depend(it) }
-
-				deps.each |dep| {
-					if (transPodNamesDone.contains(dep.name)) return
-
-					if (sysPods.isSysPod(dep.name) || sysPods.isSkyPod(dep.name)) {
-						// need to add this to build.deps
-						udep := uberDepends.find { it.name == dep.name }
-						if (udep != null) {
-							// keep the newest dependency
-							if (dep.version > udep.version)
-								uberDepends.add(dep).remove(udep)
-						} else {
-							uberDepends.add(dep)
-						}
-
-					} else {
-						if (!uberPodNames.contains(dep.name)) {
-							uberPodNames.add(dep.name)
-							transPodNamesTodo.add(dep.name)
-						}
-					}
-
-				}
-				transPodNamesDone.add(transPodName)
-
-			}.close
-		}
-		allPodNames	= uberPodNames.dup.rw.add(build.podName)
-	}
-
-	private Void filterPodCode(Str podName) {
-		usings1		:= allPodNames.map { "using ${it}"   }
-		usings2		:= allPodNames.map { "using ${it}::" }
-		uberSrcDir	:= uberDir + podName.toUri.plusSlash
-		uberSrcDir.listFiles.each |fanFile| {
-			if (fanFile.ext != "fan") return
-			fanSrc := fanFile.readAllLines
-			newSrc := fanSrc.exclude |fanLine| {
-				usings1.any { fanLine == it }
+	private Obj? addUberFilenames(Str:Str[] uberFilenames, Str pName, Str:Str podMeta) {
+		uberMetas := (Str[]) (podMeta["afBuild.uberPod"]?.split ?: Str#.emptyList)
+		uberMetas.each |uberMeta| {
+			podName  := uberMeta
+			fileName := "*"
+			if (uberMeta.contains("/")) {
+				split	 := podName.split('/')
+				podName	 = split[0]
+				fileName = split[1]
+				if (!fileName.contains("."))
+					fileName = fileName + ".fan"	// assume source files if not specified
 			}
-
-			// deal with "using XXX as YYY" statements
-			mewAlt := false
-			mewSrc := newSrc.map |fanLine| {
-				if (usings2.any { fanLine.startsWith(it) }) {
-					mewAlt = true
-					return "using ${build.podName}" + fanLine[fanLine.index("::")..-1]
-				}
-				return fanLine
-			}
-
-			if (fanSrc.size != mewSrc.size || mewAlt)
-				fanFile.out.writeChars(mewSrc.join("\n")).flush.close
+			fileList := uberFilenames.getOrAdd(podName) { Str[,] }
+			fileList.add(fileName)
 		}
+		return null
 	}
 
-	private Void explodePods() {
+	private Uri[] explodePods(MyDir uberDir, Str:Str[] uberFilenames) {
+		newSrcDirs := Uri[,]
+
+		// first explode the pod we're building...
 		build.log.info("UberPod - exploding $build.podName ...")
+		uberSrcDir := uberDir + build.podName.toUri.plusSlash
+		newSrcDirs.add(uberSrcDir.uri)
+
 		build.srcDirs?.each |srcDirUrl| {
-			uberSrcDir := uberDir + build.podName.toUri.plusSlash
-			srcDirUrl.toFile.listFiles.each { it.copyTo(uberSrcDir + it.name.toUri) }
-			uberSrcDirs.add(uberSrcDir.uri.relTo(build.scriptDir.uri))
+			MyDir(srcDirUrl).listFiles.each {
+				it.copyInto(uberSrcDir)
+			}
 		}
 
-		uberPodNames.each |podName| {
-			uberPodDir	:= uberDir + podName.toUri.plusSlash
-			podFile 	:= Env.cur.findPodFile(podName)
-			podZip		:= Zip.open(podFile)
+		// then explode all the pods we're ubering up
+		uberFilenames.each |includeFiles, podName| {
+			build.log.info("UberPod - exploding $podName ...")
+			uberSrcDir = uberDir + podName.toUri.plusSlash
+			newSrcDirs.add(uberSrcDir.uri)
 
-			try {
-				podMeta	:= podZip.contents[`/meta.props`].readProps
-				if (podMeta["pod.docSrc"] != "true")
-					build.log.warn("$podName has NO src files!")
-				else
-					build.log.info("UberPod - exploding $podName ...")
+			uberDstDir := uberSrcDir	// + uri.relTo(`/src/`)
+			myEnv.findPodFile(podName).open |pod| {
+				pod.eachSrcFile |file, uri| {
+					copyFile := includeFiles.isEmpty || includeFiles.contains(file.name)
+					if (copyFile)
+						file.copyInto(uberDstDir)
+				}
+				return null
+			}
+		}
 
-				includeFiles := uberFilenames[podName]
-				podZip.contents.each |file, uri| {
-					if (includeFiles.size > 0 && !includeFiles.any { it == uri.name }) return
-					if (uri.path.first != "src")				return
-					if (uri.basename.endsWith("Test"))			return	// sometimes (in dev pods) test code sneaks in with the source!
-					if (uri.basename.startsWith("Test"))		return	// sometimes (in dev pods) test code sneaks in with the source!
-					uberDstDir := uberPodDir + uri.relTo(`/src/`)
-					file.copyTo(uberDstDir)
-					uberSrcDirs.add(uberDstDir.uri.relTo(build.scriptDir.uri).parent)
+		return newSrcDirs	//.unique
+	}
+
+	private Void filterPodCode(MyDir uberDir, Str[] allUberPodNames) {
+		usings1		:= allUberPodNames.map { "using ${it}"   }
+		usings2		:= allUberPodNames.map { "using ${it}::" }
+		podNames	:= allUberPodNames.dup.add(build.podName)
+
+		podNames.each |podName| {
+			uberSrcDir	:= uberDir + podName.toUri.plusSlash
+			uberSrcDir.listFiles.each |fanFile| {
+				if (fanFile.ext != "fan") return
+				fanSrc := fanFile.readAllLines
+				newSrc := fanSrc.exclude |fanLine| {
+					usings1.any { fanLine == it }
 				}
 
-				uberedPods.add(Depend(podName + " " + podMeta["pod.version"]))
-			} finally
-				podZip.close
+				// deal with "using XXXX as YYYY" statements
+				mewAlt := false
+				mewSrc := newSrc.map |fanLine| {
+					if (usings2.any { fanLine.startsWith(it) }) {
+						mewAlt = true
+						return "using ${build.podName}" + fanLine[fanLine.index("::")..-1]
+					}
+					return fanLine
+				}
+
+				if (fanSrc.size != mewSrc.size || mewAlt)
+					fanFile.write(mewSrc.join("\n"))
+			}
 		}
+	}
+
+	** Walks the dependency tree, calling 'collect' on each depends.
+	private Str[] collectDependencies(Str[] podNames, Str[] podsToIgnore, |Str podName->Bool| collect) {
+		inspected := podsToIgnore.dup.rw
+		toInspect := podNames.dup.rw
+		collected := Str[,]
+
+		while (toInspect.size > 0) {
+			podName := toInspect.removeAt(0)
+			if (inspected.contains(podName)) continue
+			inspected.add(podName)
+
+			myEnv.findPodFile(podName).open |pod| {
+				pod.depends.each |dep| {
+					toInspect.add(dep.name)
+
+					if (collect(dep.name))
+						collected.add(dep.name)
+				}
+				return null
+			}
+		}
+		return collected
 	}
 }

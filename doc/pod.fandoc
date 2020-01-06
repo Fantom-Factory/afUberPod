@@ -1,4 +1,104 @@
 
 Overview
 ********
-afUberPod - My Awesome uberPod project
+'Uber Pod' is an build task that combines the source code from multiple POD's into a single Uber Pod!
+
+Features:
+ - Creates a new source directory for each POD that was combined (/build/uberPod/{podName}/{source.fan})
+ - Copies over all source code contained withing main POD
+ - Copies over all sorce code from ubered PODs listed in 'afBuild.uberPod'.
+ - Copies over all transient dependencies of ubered Pods
+ - Updates all using statements that require adjustement.
+ - Compiles new Uber Pod!
+
+Getting Started
+***************
+To make your new uber pod, stub out a new POD.
+
+pre>
+fan build init myUberPod
+<pre
+
+To make this new POD uber in other POD's the 'build.fan' file needs to be slightly modified.  First, add in a new using statement.
+
+pre>
+#! /usr/bin/env fan
+... //Other using satements here
+using afUberPod::UberPodTask
+
+...
+<pre
+
+In the 'new make' section, add a meta entry that lists all of the PODs you want ubered together along with the using statement shown below.
+
+pre>
+meta = [
+
+    ... //Other meta here
+    "afBuild.uberPod" : "afBeanUtils afConcurrent"
+]
+<pre
+
+Below 'new make()', add in the override method with the code shown below.
+
+pre>
+override Void compileFan() {
+
+    // Run the UberPodTask build task
+    UberPodTask(this).run
+
+    // Run compilation as normal
+    super.compileFan
+}
+<pre
+
+Now simply build your new pod!
+
+Transient Dependencies
+**********************
+When ubering together PODs that have sub dependencies, UberPodTask will automatically add in all required sorce code for thoes sub dependencies.  It will skip all default fantom source PODs (such as sys).
+
+Specifying files
+****************
+When adding in other PODs to be ubered, you can instead specify specific files.  When doing this, only the files specified will be added.
+
+pre>
+meta = [
+    ... //Other meta here
+    "afBuild.uberPod" : "afBeanUtils afConcurrent/ConMon.fan"
+]
+<pre
+
+Transative PODs
+***************
+As an option, you can add the meta 'afBuild.uberPod' to any sub uber PODS.  These can point to entire PODs or specific source files to add to your main uber pod.
+
+For example, say you are creating an uberPod, 'afExplorer'.  This pod has the following meta in its build file.
+
+pre>
+meta = [
+    ... //Other meta here
+    "afBuild.uberPod" : "afBeanUtils"
+]
+<pre
+
+Looking inside the 'build.fan' file of afBeanUtils, we see the following in its meta.'
+
+pre>
+meta = [
+    ... //Other meta here
+    "afBuild.uberPod" : "afConcurrent/ConMon.fan afFooBar"
+]
+<pre
+
+When the main uberPod 'afExplorer' runs, it will copy over all source files from afBeanUtils, as well as the file 'ConMon.fan' from 'afConcurrent' and all files inside of the POD 'afFooBar'.
+All of these additional PODs are handeled in the same way as any other ubered POD, their dependenices are checked and added (if applicable) and they are added into the uberedPod meta.
+
+Conflicts
+*********
+For PODs to be ubered together, all classes and source files must be unique!  If there are any conflicts, the compiler will return errors notifying you of the conflicts.
+
+Future Features
+***************
+Below is a list of future features that may or may not be helpful in the future.
+ - Add a 'stack trace' that prints out all PODs and dependencies that was used.  This may be useful when debugging a large uberPod with a lot of subDependencies.
